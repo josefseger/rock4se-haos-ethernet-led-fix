@@ -4,6 +4,8 @@ set -euo pipefail
 INTERFACE="end0"
 FIX_LEDCR="0x2f71"
 FIX_EEELCR="0x6007"
+HAOS_NATIVE_LEDCR="0x6251"
+HAOS_NATIVE_EEELCR="0x600f"
 STATE_FILE="/data/native-led-values"
 CHECK_INTERVAL=60
 
@@ -38,7 +40,16 @@ save_native_if_needed() {
     local ledcr="$1"
     local eeelcr="$2"
 
+    # Never overwrite an already captured native state.
+    if [[ -f "${STATE_FILE}" ]]; then
+        return 0
+    fi
+
+    # If the PHY is already in the desired fixed state, we cannot infer the
+    # pre-fix values. This can happen after manual testing before app install.
+    # restore_native() has a verified HAOS fallback for that case.
     if [[ "${ledcr}" == "${FIX_LEDCR}" && "${eeelcr}" == "${FIX_EEELCR}" ]]; then
+        bashio::log.info "PHY was already using the fixed LED values; native state was not captured."
         return 0
     fi
 
@@ -55,6 +66,7 @@ apply_fix() {
     save_native_if_needed "${ledcr}" "${eeelcr}"
 
     if [[ "${ledcr}" == "${FIX_LEDCR}" && "${eeelcr}" == "${FIX_EEELCR}" ]]; then
+        bashio::log.info "Ethernet LED fix already active: LEDCR=${ledcr}, EEELCR=${eeelcr}"
         return 0
     fi
 
@@ -72,25 +84,43 @@ apply_fix() {
 }
 
 restore_native() {
-    local native_ledcr native_eeelcr
+    local native_ledcr native_eeelcr source_description output ledcr eeelcr
 
-    if [[ ! -f "${STATE_FILE}" ]]; then
-        bashio::log.info "LED fix disabled. No saved native values exist, so no PHY registers will be changed."
-        return 0
+    if [[ -f "${STATE_FILE}" ]]; then
+        # shellcheck disable=SC1090
+        source "${STATE_FILE}"
+        native_ledcr="${LEDCR:-}"
+        native_eeelcr="${EEELCR:-}"
+        source_description="saved native values"
+
+        if [[ -z "${native_ledcr}" || -z "${native_eeelcr}" ]]; then
+            bashio::log.warning "Saved native LED state is invalid; using verified HAOS defaults instead."
+            native_ledcr="${HAOS_NATIVE_LEDCR}"
+            native_eeelcr="${HAOS_NATIVE_EEELCR}"
+            source_description="verified HAOS defaults"
+        fi
+    else
+        # The first development/test install may start while the PHY has
+        # already been manually changed to the Debian values. We measured the
+        # original HAOS values on this exact ROCK 4 SE / RTL8211F-VD setup.
+        native_ledcr="${HAOS_NATIVE_LEDCR}"
+        native_eeelcr="${HAOS_NATIVE_EEELCR}"
+        source_description="verified HAOS defaults"
     fi
 
-    # shellcheck disable=SC1090
-    source "${STATE_FILE}"
-    native_ledcr="${LEDCR:-}"
-    native_eeelcr="${EEELCR:-}"
-
-    if [[ -z "${native_ledcr}" || -z "${native_eeelcr}" ]]; then
-        bashio::log.warning "Saved native LED state is invalid; leaving PHY registers unchanged."
-        return 0
-    fi
-
-    bashio::log.info "LED fix disabled; restoring saved native values: LEDCR=${native_ledcr}, EEELCR=${native_eeelcr}"
+    bashio::log.info "LED fix disabled; restoring ${source_description}: LEDCR=${native_ledcr}, EEELCR=${native_eeelcr}"
     /usr/local/bin/rtl8211f-ledctl write "${INTERFACE}" "${native_ledcr}" "${native_eeelcr}" >/dev/null
+
+    output="$(read_registers)"
+    ledcr="$(printf '%s\n' "${output}" | get_value LEDCR)"
+    eeelcr="$(printf '%s\n' "${output}" | get_value EEELCR)"
+
+    if [[ "${ledcr}" != "${native_ledcr}" || "${eeelcr}" != "${native_eeelcr}" ]]; then
+        bashio::log.fatal "Native PHY LED register verification failed: LEDCR=${ledcr}, EEELCR=${eeelcr}"
+        exit 1
+    fi
+
+    bashio::log.info "Native Ethernet LED configuration active: LEDCR=${ledcr}, EEELCR=${eeelcr}"
 }
 
 ENABLED="$(bashio::config 'led_fix')"
