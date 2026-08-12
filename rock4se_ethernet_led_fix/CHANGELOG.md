@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1
+
+- Fix disabling the app when the first app start happened after manual PHY testing had already applied the Debian LED values.
+- If no saved native state exists, disabling now restores the experimentally verified HAOS defaults `0x6251` / `0x600f`.
+- Verify the native register values after restore.
+- Never overwrite an already captured native state.
+- Add clearer log messages for already-active and restored configurations.
+
 ## 0.1.0
 
 - Initial release.
