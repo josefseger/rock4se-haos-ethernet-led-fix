@@ -1,0 +1,5 @@
+configuration:
+  led_fix:
+    name: Enable Ethernet LED fix
+    description: >-
+      When enabled, apply the Debian-style RTL8211F LED configuration: yellow steady link and green traffic activity. When disabled, restore the native values saved before the fix was first applied, when available.
