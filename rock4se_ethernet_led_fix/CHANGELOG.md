@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Add branded icon and logo for the Home Assistant app.
+
 ## 0.1.1
 
 - Fix disabling the app when the first app start happened after manual PHY testing had already applied the Debian LED values.

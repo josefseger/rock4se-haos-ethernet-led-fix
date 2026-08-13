@@ -1,5 +1,5 @@
 name: "ROCK 4SE Ethernet LED Fix"
-version: "0.1.1"
+version: "0.1.2"
 slug: "rock4se_ethernet_led_fix"
 description: >-
   Applies the Debian-style RTL8211F Ethernet LED configuration on Radxa ROCK 4 SE running Home Assistant OS.
